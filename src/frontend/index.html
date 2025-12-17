@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Coding Agent Orchestrator</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>AI Coding Agent Orchestrator</h1>
+      <div id="status-bar">
+        <span class="loading">Detecting agents...</span>
+      </div>
+    </header>
+
+    <section id="controls">
+      <button id="add-task-btn">+ Add Task</button>
+      <select id="ollama-model">
+        <option value="">Select Ollama Model</option>
+      </select>
+    </section>
+
+    <section id="task-queue">
+      <h2>Task Queue</h2>
+      <div id="task-list">
+        <p class="empty-state">No tasks in queue. Click "+ Add Task" to get started.</p>
+      </div>
+    </section>
+
+    <!-- Add Task Modal -->
+    <dialog id="add-task-modal">
+      <form id="task-form">
+        <h2>Create New Task</h2>
+
+        <label>
+          Agent:
+          <select id="task-agent" required>
+            <option value="">Select agent...</option>
+          </select>
+        </label>
+
+        <label>
+          Folder:
+          <input type="text" id="task-folder" placeholder="/path/to/project" required>
+        </label>
+
+        <label>
+          Prompt:
+          <textarea id="task-prompt" rows="6" placeholder="Describe what you want the AI to do..." required></textarea>
+        </label>
+
+        <div class="enhance-controls">
+          <button type="button" id="enhance-btn">Enhance with Ollama</button>
+          <button type="button" id="undo-enhance-btn" disabled>Undo</button>
+          <span id="enhance-status"></span>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-btn">Cancel</button>
+          <button type="submit">Add to Queue</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

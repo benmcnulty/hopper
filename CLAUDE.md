@@ -12,12 +12,18 @@ AI Coding Agent Orchestrator - a standalone macOS application built with Bun tha
 # Install dependencies
 bun install
 
-# Development with hot reload
+# Development (serves on http://localhost:3000)
 bun run dev
+
+# Type check
+bun run tsc --noEmit
 
 # Production build (creates standalone executable)
 bun run build
-# Output: dist/ai-orchestrator-macos
+# Output: dist/ai-orchestrator (57MB, includes Bun runtime)
+
+# Run standalone
+./dist/ai-orchestrator
 ```
 
 ## Architecture
@@ -45,16 +51,16 @@ bun run build
 The app orchestrates these external tools:
 
 ```bash
-# Claude Code
+# Claude Code (run from target directory with -p for non-interactive)
 claude --version
-claude --message "<prompt>" --folder "<path>"
+claude -p "<prompt>"  # Run from target folder with cwd set
 
-# OpenAI Codex
+# OpenAI Codex (use exec command with -C for directory)
 codex --version
-codex run --message "<prompt>" --cwd "<path>"
+codex exec -C "<path>" "<prompt>"
 
 # Ollama
-curl http://localhost:11434/api/tags    # List models
+curl http://localhost:11434/api/tags     # List models
 curl http://localhost:11434/api/generate # Generate text
 ```
 

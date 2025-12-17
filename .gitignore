@@ -1,0 +1,25 @@
+# Bun dependencies
+node_modules/
+bun.lockb
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.*
+
+# Build artifacts
+dist/
+build/
+.cache/
+
+# Editor directories and files
+.vscode/
+.idea/
+.DS_Store
+
+# Coverage
+coverage/
