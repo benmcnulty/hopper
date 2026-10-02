@@ -123,68 +123,96 @@ async function handleClientMessage(
   }
 }
 
-// Start server
-const server = Bun.serve<ClientData>({
-  port: PORT,
+// This is a local trusted-user tool, not an authenticated network service.
+export function isLocalRequest(req: Request, port: number): boolean {
+  const url = new URL(req.url);
+  const allowed = ["127.0.0.1", "localhost"].map(hostname => new URL(`http://${hostname}:${port}`).origin);
+  if (!allowed.includes(url.origin)) return false;
+  const host = req.headers.get("Host");
+  if (host && host !== url.host) return false;
+  const origin = req.headers.get("Origin");
+  if (origin && origin !== url.origin) return false;
+  if (req.headers.get("Sec-Fetch-Site") === "cross-site") return false;
+  // Browser task controls must carry a matching Origin, including upgrades.
+  return url.pathname !== "/ws" || origin === url.origin;
+}
 
-  fetch(req, server) {
-    const url = new URL(req.url);
+// Importing modules for tests must not start a listener or open a browser.
+export function startServer(port = PORT) {
+  return Bun.serve<ClientData>({
+    hostname: "127.0.0.1",
+    port,
 
-    // WebSocket upgrade
-    if (url.pathname === "/ws") {
-      const upgraded = server.upgrade(req, {
-        data: { id: crypto.randomUUID() },
-      });
-      if (upgraded) return undefined;
-      return new Response("WebSocket upgrade failed", { status: 400 });
-    }
+    fetch(req, server) {
+      const requestPort = server.port;
+      if (requestPort === undefined || !isLocalRequest(req, requestPort)) {
+        return new Response("Forbidden local request", { status: 403 });
+      }
+      if (req.method !== "GET") {
+        return new Response("Method not allowed", { status: 405, headers: { Allow: "GET" } });
+      }
+      const url = new URL(req.url);
 
-    // Serve embedded static files
-    switch (url.pathname) {
-      case "/":
-      case "/index.html":
-        return new Response(indexHtml as unknown as BodyInit, {
-          headers: { "Content-Type": "text/html" },
+      // WebSocket upgrade
+      if (url.pathname === "/ws") {
+        const upgraded = server.upgrade(req, {
+          data: { id: crypto.randomUUID() },
         });
-      case "/styles.css":
-        return new Response(stylesCss as unknown as BodyInit, {
-          headers: { "Content-Type": "text/css" },
-        });
-      case "/app.js":
-        return new Response(appJs as unknown as BodyInit, {
-          headers: { "Content-Type": "application/javascript" },
-        });
-      default:
-        return new Response("Not found", { status: 404 });
-    }
-  },
+        if (upgraded) return undefined;
+        return new Response("WebSocket upgrade failed", { status: 400 });
+      }
 
-  websocket: {
-    open(wsClient: ServerWebSocket<ClientData>) {
-      ws.addClient(wsClient);
-    },
-
-    close(wsClient: ServerWebSocket<ClientData>) {
-      ws.removeClient(wsClient);
-    },
-
-    message(wsClient: ServerWebSocket<ClientData>, message) {
-      try {
-        const parsed = JSON.parse(String(message)) as WSClientMessage;
-        handleClientMessage(wsClient, parsed);
-      } catch {
-        ws.sendError(wsClient, "Invalid message format");
+      // Serve embedded static files
+      switch (url.pathname) {
+        case "/":
+        case "/index.html":
+          return new Response(indexHtml as unknown as BodyInit, {
+            headers: { "Content-Type": "text/html" },
+          });
+        case "/styles.css":
+          return new Response(stylesCss as unknown as BodyInit, {
+            headers: { "Content-Type": "text/css" },
+          });
+        case "/app.js":
+          return new Response(appJs as unknown as BodyInit, {
+            headers: { "Content-Type": "application/javascript" },
+          });
+        default:
+          return new Response("Not found", { status: 404 });
       }
     },
-  },
-});
 
-console.log(`AI Orchestrator running at http://localhost:${PORT}`);
+    websocket: {
+      open(wsClient: ServerWebSocket<ClientData>) {
+        ws.addClient(wsClient);
+      },
 
-// Auto-open browser on macOS
-if (process.platform === "darwin") {
-  Bun.spawn(["open", `http://localhost:${PORT}`], {
-    stdout: "ignore",
-    stderr: "ignore",
+      close(wsClient: ServerWebSocket<ClientData>) {
+        ws.removeClient(wsClient);
+      },
+
+      message(wsClient: ServerWebSocket<ClientData>, message) {
+        try {
+          const parsed = JSON.parse(String(message)) as WSClientMessage;
+          handleClientMessage(wsClient, parsed);
+        } catch {
+          ws.sendError(wsClient, "Invalid message format");
+        }
+      },
+    },
   });
+}
+
+if (import.meta.main) {
+  const server = startServer();
+  console.log(`AI Orchestrator running at http://localhost:${server.port}`);
+
+  // Auto-open browser on macOS
+  if (process.platform === "darwin") {
+    Bun.spawn(["open", `http://localhost:${server.port}`], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+  }
+
 }
