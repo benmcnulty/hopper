@@ -20,7 +20,7 @@ bun run tsc --noEmit
 
 # Production build (creates standalone executable)
 bun run build
-# Output: dist/ai-orchestrator (57MB, includes Bun runtime)
+# Output: dist/ai-orchestrator (binary size depends on build/runtime)
 
 # Run standalone
 ./dist/ai-orchestrator
@@ -70,3 +70,11 @@ curl http://localhost:11434/api/generate # Generate text
 - Sanitize prompt inputs before passing to shell commands
 - Only operate within user-approved directories
 - API keys are managed via environment variables, never stored in app
+
+## Source review boundary
+
+The README now distinguishes implemented modules from original planning goals.
+Folder approvals, path containment and application authentication remain
+requirements, not implemented guarantees. The transport is now loopback-only
+with Host/Origin checks and a same-origin WebSocket handshake requirement. Do not execute real coding agents
+for a documentation or transport-only check. Stub CLIs/Ollama in focused tests.

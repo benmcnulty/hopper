@@ -1,280 +1,79 @@
-# AI Coding Agent Orchestrator
+# Hopper: AI Coding Agent Orchestrator
 
-A standalone macOS application built with Bun that provides a visual interface for managing and orchestrating multiple AI coding agents (Claude Code, OpenAI Codex) with intelligent prompt enhancement via local Ollama models.
+An experimental Bun application for queuing local coding-agent tasks and
+optionally expanding prompts through Ollama. It has an implemented browser UI
+and server; the original planning documents are design history, not a claim that
+every proposed capability is complete.
 
-## Overview
+## Implemented source
 
-This application serves as a **visual control center** for AI-assisted development workflows, allowing developers to:
+- [`src/main.ts`](src/main.ts) embeds static frontend assets and handles WebSockets.
+- [`src/server/detector.ts`](src/server/detector.ts) detects installed agent CLIs
+  and local Ollama availability.
+- [`src/server/queue.ts`](src/server/queue.ts) holds tasks in memory and applies
+  folder-string locks: tasks for distinct folders can run concurrently.
+- [`src/server/executor.ts`](src/server/executor.ts) launches Claude/Codex commands
+  and streams stdout/stderr to the UI.
+- [`src/server/ollama.ts`](src/server/ollama.ts) expands prompts using the local
+  server at `http://localhost:11434`.
+- [`src/frontend`](src/frontend) contains the plain HTML/CSS/JavaScript interface.
 
-- **Queue and manage multiple coding tasks** across different projects
-- **Enhance prompts** using local LLMs before sending to coding agents
-- **Execute tasks in parallel** (when in different folders) or sequentially (same folder)
-- **Monitor real-time terminal output** for each task in collapsible cards
-- **Detect and version-check** installed coding agents automatically
+Persistent task history, tray integration, a native folder-permission picker,
+approved-root enforcement and verified cross-platform packaging are not supplied
+by those modules. Different spellings/symlinks of the same folder are not a
+filesystem isolation boundary.
 
-## Core Architecture
+## Original local workflow
 
-### Technology Stack
-- **Runtime:** Bun (with `--compile` for standalone executable)
-- **Backend:** Bun.serve() with WebSocket support for real-time updates
-- **Frontend:** Vanilla HTML/CSS/JavaScript (embedded in executable)
-- **LLM Integration:** Ollama local API (http://localhost:11434)
-- **Process Management:** Bun.spawn() for background terminal execution
+Use Bun (candidate tested on1.4.2) and Node.js for the TypeScript checker.
+Run from the repository root:
 
-### Key Components
-
-1. **Agent Detector**
-   - Scans system for `claude` and `codex` CLI tools
-   - Reports installed versions
-   - Validates Ollama availability and lists models
-
-2. **Task Queue Manager**
-   - Maintains ordered queue of pending tasks
-   - Enforces folder-level locking (same folder = sequential)
-   - Enables parallel execution across different folders
-   - Handles task reordering (up/down buttons)
-
-3. **Ollama Prompt Enhancer**
-   - Accepts minimal user input
-   - Uses selected Ollama model to expand into detailed prompt
-   - Provides undo capability to revert enhancements
-   - Understands context of different coding agents' prompt styles
-
-4. **Task Execution Engine**
-   - Spawns agent processes in specified folders
-   - Captures stdout/stderr in real-time
-   - Streams output to UI via WebSocket
-   - Handles process lifecycle (start/stop/complete)
-
-5. **UI Task Cards**
-   - Display task metadata (folder, agent, prompt)
-   - Show execution status (queued/running/complete/error)
-   - Collapsible terminal output viewer
-   - Controls for reordering and management
-
-## User Workflow
-
-### Minimal End-to-End Vector (MVP)
-
-1. **Launch Application**
-   - App detects installed agents: Claude Code, OpenAI Codex
-   - Connects to Ollama and populates model dropdown
-   - Displays version information for all detected tools
-
-2. **Create Task**
-   - Click "Add Task" button
-   - Fill form:
-     - **Folder:** Select project directory (triggers permission request)
-     - **Agent:** Choose from detected agents (claude/codex)
-     - **Prompt:** Enter minimal description
-   - Click "Enhance" to use Ollama for prompt expansion
-   - Review enhanced prompt (use "Undo" if needed)
-   - Submit to add task to queue
-
-3. **Manage Queue**
-   - View all queued tasks as cards
-   - Reorder with up/down buttons
-   - Tasks in different folders execute in parallel
-   - Tasks in same folder execute sequentially
-
-4. **Monitor Execution**
-   - Watch real-time status updates
-   - Expand terminal output within each card
-   - See completion status and any errors
-
-## Technical Requirements
-
-### Detected Agent Commands
-
-**Claude Code:**
-```bash
-claude --version
-claude --message "<prompt>" --folder "<path>"
+```sh
+bun install --frozen-lockfile
+bun run dev
 ```
 
-**OpenAI Codex:**
-```bash
-codex --version
-codex run --message "<prompt>" --cwd "<path>"
-```
-*(Note: Actual Codex CLI syntax may vary, will be verified during implementation)*
+The app uses port 3000 and opens a browser automatically on macOS. Agent execution
+requires the corresponding existing CLI installation/configuration; prompt
+enhancement requires an installed Ollama model. No app-specific `.env` variables
+configure the port or Ollama URL in the current source. Child processes inherit
+the host environment and their installed CLI permissions. Creating a task can
+immediately invoke an external coding agent; merely previewing the UI is not a
+reason to submit a task. Stop the server with Ctrl+C.
 
-**Ollama:**
-```bash
-ollama --version
-curl http://localhost:11434/api/tags  # List models
-curl http://localhost:11434/api/generate  # Generate text
-```
+`bun run build` compiles to `dist/ai-orchestrator` on the build host. The original
+`bun run start` script uses a POSIX executable path. The 2026-10-02 candidate passed a frozen install, strict TypeScript check,
+five transport tests and standalone Windows compilation with Bun 1.4.2. The
+Windows output is `dist/ai-orchestrator.exe`; it was not launched. No real
+agent/provider or cross-platform release packaging was verified.
 
-### Folder Permissions
+## Current trust boundary
 
-When user selects a folder, the app must:
-- Request macOS file system access for that specific path
-- Validate read/write permissions
-- Store approved paths for subsequent task executions
+The server binds to `127.0.0.1` and accepts only local `localhost`/`127.0.0.1`
+Host values on its actual port. Foreign/null origins and cross-site browser
+requests are rejected before routing; WebSocket controls require a matching
+browser Origin and GET. Reverse proxies, LAN hosting and cross-origin embeds are
+not supported by this local-only boundary.
 
-### Folder-Based Execution Rules
+This is not application authentication or an agent sandbox. Trusted local
+processes can supply matching headers; the coding agent still inherits its
+installed permissions and can act in the folder the user submits. Process
+arguments are passed as an array, but no approved-root enforcement or native
+permission isolation is implemented. Keep it off untrusted networks and review
+all agent tasks before submitting them.
 
-**Parallel Execution:**
-```
-Task A: /Users/ben/project-one (running)
-Task B: /Users/ben/project-two (running)  ← Parallel OK
-```
+## Verification and contributions
 
-**Sequential Execution:**
-```
-Task A: /Users/ben/project-one (running)
-Task B: /Users/ben/project-one (queued)   ← Must wait for Task A
-```
+Transport regressions in [`src/main.test.ts`](src/main.test.ts) exercise the real
+loopback HTTP listener and WebSocket handshake, hostile Host/Origin rejection
+and read-only static methods. Use `bun run check`, `bun test` and `bun run build`;
+the candidate CI performs these checks with read-only repository permissions and
+has no deployment step. Queue ordering/process lifecycle and full UI/accessibility
+flows are not covered by those transport tests. Stub external CLIs and inference
+rather than invoking paid/live agents. Read [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md),
+keep source maps and tested commands current, and include actual test/build
+evidence with code changes. The original [planning prompt](planning-prompt.md)
+remains available as historical intent.
 
-### Prompt Enhancement Flow
-
-**Input (minimal):**
-```
-fix the login bug
-```
-
-**Ollama Enhancement (using llama3.2):**
-```
-Analyze the authentication flow in this project and identify the root cause 
-of login failures. The bug likely involves session management, token validation, 
-or password hashing. Please:
-
-1. Review authentication-related files (auth.js, login.tsx, middleware)
-2. Check for common issues: expired tokens, CORS problems, bcrypt mismatches
-3. Examine error logs for relevant stack traces
-4. Propose a fix with updated code
-5. Add unit tests to prevent regression
-
-Provide a detailed explanation of the issue and the solution.
-```
-
-**Undo:** Reverts to original "fix the login bug"
-
-## Build & Distribution
-
-### Development
-```bash
-bun install
-bun run dev  # Starts local server with hot reload
-```
-
-### Production Build
-```bash
-bun run build  # Creates standalone executable
-# Output: dist/ai-orchestrator-macos
-```
-
-### Running Standalone
-```bash
-./dist/ai-orchestrator-macos
-# Opens browser to http://localhost:3000
-# App runs in background with system tray icon (future enhancement)
-```
-
-## File Structure
-
-```
-ai-orchestrator/
-├── src/
-│   ├── main.ts                 # Entry point, starts server
-│   ├── server/
-│   │   ├── detector.ts         # Agent & Ollama detection
-│   │   ├── queue.ts            # Task queue management
-│   │   ├── executor.ts         # Process spawning & monitoring
-│   │   ├── ollama.ts           # Ollama API client
-│   │   └── websocket.ts        # Real-time communication
-│   ├── frontend/
-│   │   ├── index.html          # Main UI
-│   │   ├── app.ts              # Frontend logic
-│   │   └── styles.css          # Styling
-│   └── types.ts                # Shared TypeScript interfaces
-├── package.json
-├── bunfig.toml
-├── tsconfig.json
-└── README.md
-```
-
-## Data Models
-
-### Task
-```typescript
-interface Task {
-  id: string;
-  folderPath: string;
-  agent: 'claude' | 'codex';
-  prompt: string;
-  originalPrompt?: string;  // Before enhancement
-  status: 'queued' | 'running' | 'completed' | 'error';
-  terminalOutput: string[];
-  exitCode?: number;
-  createdAt: Date;
-  startedAt?: Date;
-  completedAt?: Date;
-}
-```
-
-### Agent
-```typescript
-interface Agent {
-  name: 'claude' | 'codex';
-  command: string;
-  installed: boolean;
-  version: string;
-}
-```
-
-### OllamaModel
-```typescript
-interface OllamaModel {
-  name: string;
-  size: string;
-  modified: string;
-}
-```
-
-## Security Considerations
-
-1. **Path Validation:** Prevent directory traversal attacks
-2. **Command Injection:** Sanitize all prompt inputs before passing to shell
-3. **Folder Access:** Only operate within user-approved directories
-4. **API Keys:** Agents' API keys managed via environment variables (not stored in app)
-
-## Future Enhancements (Post-MVP)
-
-- [ ] Persistent task history (SQLite)
-- [ ] Task templates/presets
-- [ ] Multi-agent collaboration (sequential handoffs)
-- [ ] Cost tracking for API usage
-- [ ] Git integration (auto-commit on task completion)
-- [ ] Export task results as markdown reports
-- [ ] System tray mode for background operation
-- [ ] Linux and Windows support
-
-## Development Principles
-
-- **Progressive Enhancement:** Build working vertical slice first
-- **Real-world Testing:** Use app to build itself (dogfooding)
-- **Minimal Dependencies:** Leverage Bun's built-in capabilities
-- **Type Safety:** Comprehensive TypeScript throughout
-- **Error Resilience:** Graceful degradation when agents unavailable
-
-## Getting Started
-
-This project is designed to be initialized with Claude Code in Planning Mode:
-
-1. Place this README.md in an empty repository
-2. Run: `claude init` to generate `claude.md` configuration
-3. Use the planning prompt (see PLANNING_PROMPT.md) to kick off development
-4. Let AI agents build the foundation while you refine requirements
-
-## License
-
-MIT - Open source for the AI development community
-
----
-
-**Status:** Planning Phase  
-**Target MVP:** Core functionality with Claude Code + Codex + Ollama integration  
-**Platform:** macOS (arm64 & x64)  
-**Build System:** Bun 1.0+
+The original README declares MIT; a standalone `LICENSE` file has not yet been
+committed. Preserve that intent and any upstream provenance.

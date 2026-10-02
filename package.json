@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "bun run src/main.ts",
     "build": "bun build src/main.ts --compile --outfile dist/ai-orchestrator",
-    "start": "./dist/ai-orchestrator"
+    "start": "./dist/ai-orchestrator",
+    "check": "tsc --noEmit",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
