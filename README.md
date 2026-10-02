@@ -25,7 +25,7 @@ filesystem isolation boundary.
 
 ## Original local workflow
 
-Use Bun (candidate tested on1.4.2) and Node.js for the TypeScript checker.
+Use Bun (candidate tested on 1.4.2) and Node.js for the TypeScript checker.
 Run from the repository root:
 
 ```sh
@@ -43,7 +43,7 @@ reason to submit a task. Stop the server with Ctrl+C.
 
 `bun run build` compiles to `dist/ai-orchestrator` on the build host. The original
 `bun run start` script uses a POSIX executable path. The 2026-10-02 candidate passed a frozen install, strict TypeScript check,
-five transport tests and standalone Windows compilation with Bun 1.4.2. The
+six transport tests and standalone Windows compilation with Bun 1.4.2. The
 Windows output is `dist/ai-orchestrator.exe`; it was not launched. No real
 agent/provider or cross-platform release packaging was verified.
 
@@ -60,7 +60,9 @@ processes can supply matching headers; the coding agent still inherits its
 installed permissions and can act in the folder the user submits. Process
 arguments are passed as an array, but no approved-root enforcement or native
 permission isolation is implemented. Keep it off untrusted networks and review
-all agent tasks before submitting them.
+all agent tasks before submitting them. These tests cover inbound access only;
+outbound redirects/upstream cancellation and agent-process sandboxing are not
+established by this repair.
 
 ## Verification and contributions
 

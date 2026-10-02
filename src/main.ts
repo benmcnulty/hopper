@@ -124,9 +124,9 @@ async function handleClientMessage(
 }
 
 // This is a local trusted-user tool, not an authenticated network service.
-function isLocalRequest(req: Request, port: number): boolean {
+export function isLocalRequest(req: Request, port: number): boolean {
   const url = new URL(req.url);
-  const allowed = [`http://127.0.0.1:${port}`, `http://localhost:${port}`];
+  const allowed = ["127.0.0.1", "localhost"].map(hostname => new URL(`http://${hostname}:${port}`).origin);
   if (!allowed.includes(url.origin)) return false;
   const host = req.headers.get("Host");
   if (host && host !== url.host) return false;

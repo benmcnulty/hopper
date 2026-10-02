@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { startServer } from "./main";
+import { isLocalRequest, startServer } from "./main";
 
 let server: ReturnType<typeof startServer>;
 let origin: string;
@@ -52,4 +52,10 @@ test("WebSocket controls require a matching browser origin", async () => {
 
 test("static serving only accepts GET", async () => {
   expect((await fetch(origin, { method: "POST", headers: { Origin: origin } })).status).toBe(405);
+});
+
+test("normalizes the default HTTP port without binding a privileged socket", () => {
+  expect(isLocalRequest(new Request("http://localhost:80/ws", { headers: { Origin: "http://localhost" } }), 80)).toBe(true);
+  expect(isLocalRequest(new Request("http://127.0.0.1:80/"), 80)).toBe(true);
+  expect(isLocalRequest(new Request("http://127.0.0.1:81/"), 80)).toBe(false);
 });
