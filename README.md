@@ -1,4 +1,4 @@
-# AI Coding Agent Orchestrator
+# Hopper — AI Coding Agent Orchestrator
 
 A standalone macOS application built with Bun that provides a visual interface for managing and orchestrating multiple AI coding agents (Claude Code, OpenAI Codex) with intelligent prompt enhancement via local Ollama models.
 
@@ -64,7 +64,7 @@ This application serves as a **visual control center** for AI-assisted developme
 2. **Create Task**
    - Click "Add Task" button
    - Fill form:
-     - **Folder:** Select project directory (triggers permission request)
+     - **Folder:** Enter the project directory the agent should work in
      - **Agent:** Choose from detected agents (claude/codex)
      - **Prompt:** Enter minimal description
    - Click "Enhance" to use Ollama for prompt expansion
@@ -89,15 +89,14 @@ This application serves as a **visual control center** for AI-assisted developme
 **Claude Code:**
 ```bash
 claude --version
-claude --message "<prompt>" --folder "<path>"
+claude -p "<prompt>"  # non-interactive; run with the task's folder as the working directory
 ```
 
 **OpenAI Codex:**
 ```bash
 codex --version
-codex run --message "<prompt>" --cwd "<path>"
+codex exec -C "<path>" "<prompt>"
 ```
-*(Note: Actual Codex CLI syntax may vary, will be verified during implementation)*
 
 **Ollama:**
 ```bash
@@ -106,12 +105,13 @@ curl http://localhost:11434/api/tags  # List models
 curl http://localhost:11434/api/generate  # Generate text
 ```
 
-### Folder Permissions
+### Folder Selection
 
-When user selects a folder, the app must:
-- Request macOS file system access for that specific path
-- Validate read/write permissions
-- Store approved paths for subsequent task executions
+The user provides a folder path for each task when creating it. There is no
+OS permission prompt and no stored list of approved paths: the folder is used
+directly as the agent's working directory (Claude Code runs with the folder
+as its cwd; Codex receives it via `-C`). Only point tasks at folders you trust
+the selected agent to work in.
 
 ### Folder-Based Execution Rules
 
@@ -162,12 +162,12 @@ bun run dev  # Starts local server with hot reload
 ### Production Build
 ```bash
 bun run build  # Creates standalone executable
-# Output: dist/ai-orchestrator-macos
+# Output: dist/ai-orchestrator
 ```
 
 ### Running Standalone
 ```bash
-./dist/ai-orchestrator-macos
+./dist/ai-orchestrator
 # Opens browser to http://localhost:3000
 # App runs in background with system tray icon (future enhancement)
 ```
@@ -175,7 +175,7 @@ bun run build  # Creates standalone executable
 ## File Structure
 
 ```
-ai-orchestrator/
+hopper/
 ├── src/
 │   ├── main.ts                 # Entry point, starts server
 │   ├── server/
@@ -186,12 +186,14 @@ ai-orchestrator/
 │   │   └── websocket.ts        # Real-time communication
 │   ├── frontend/
 │   │   ├── index.html          # Main UI
-│   │   ├── app.ts              # Frontend logic
+│   │   ├── app.js              # Frontend logic
 │   │   └── styles.css          # Styling
 │   └── types.ts                # Shared TypeScript interfaces
+├── docs/
+│   └── planning-prompt.md      # Original design & planning prompt
 ├── package.json
-├── bunfig.toml
 ├── tsconfig.json
+├── LICENSE
 └── README.md
 ```
 
@@ -208,9 +210,9 @@ interface Task {
   status: 'queued' | 'running' | 'completed' | 'error';
   terminalOutput: string[];
   exitCode?: number;
-  createdAt: Date;
-  startedAt?: Date;
-  completedAt?: Date;
+  createdAt: number;        // Unix epoch milliseconds
+  startedAt?: number;
+  completedAt?: number;
 }
 ```
 
@@ -220,7 +222,7 @@ interface Agent {
   name: 'claude' | 'codex';
   command: string;
   installed: boolean;
-  version: string;
+  version: string | null;
 }
 ```
 
@@ -228,17 +230,28 @@ interface Agent {
 ```typescript
 interface OllamaModel {
   name: string;
-  size: string;
-  modified: string;
+  size: number;
+  modified_at: string;
 }
 ```
 
 ## Security Considerations
 
-1. **Path Validation:** Prevent directory traversal attacks
-2. **Command Injection:** Sanitize all prompt inputs before passing to shell
-3. **Folder Access:** Only operate within user-approved directories
-4. **API Keys:** Agents' API keys managed via environment variables (not stored in app)
+Hopper is a local, single-user tool, and its security model follows from that:
+
+1. **Localhost only:** The server binds to `localhost` (port 3000) and is not
+   exposed to the network. There is no authentication, because the app is
+   meant to be reachable only from the machine it runs on.
+2. **No shell:** Tasks are spawned with `Bun.spawn()` using argv arrays (no
+   shell), so prompts are passed to the agent as arguments rather than being
+   interpreted as shell commands.
+3. **User-chosen folders:** Each task runs in the folder you specify for it:
+   Claude Code runs with that folder as its working directory, and Codex
+   receives it via `-C`. The app does not validate paths or restrict agents
+   to pre-approved directories, so only point tasks at folders you trust the
+   agent to modify.
+4. **API Keys:** The agent CLIs manage their own credentials via environment
+   variables; Hopper does not store API keys.
 
 ## Future Enhancements (Post-MVP)
 
@@ -261,20 +274,44 @@ interface OllamaModel {
 
 ## Getting Started
 
-This project is designed to be initialized with Claude Code in Planning Mode:
+### Prerequisites
 
-1. Place this README.md in an empty repository
-2. Run: `claude init` to generate `claude.md` configuration
-3. Use the planning prompt (see PLANNING_PROMPT.md) to kick off development
-4. Let AI agents build the foundation while you refine requirements
+- [Bun](https://bun.sh) 1.0+
+- [Claude Code](https://claude.ai/code) and/or the [OpenAI Codex](https://github.com/openai/codex) CLI installed and on your `PATH` (Hopper detects whichever agents are available)
+- Optional: [Ollama](https://ollama.com) running locally, for prompt enhancement
+
+### Run
+
+```bash
+git clone https://github.com/benmcnulty/hopper
+cd hopper
+bun install
+bun run dev
+```
+
+Then open http://localhost:3000 in your browser (on macOS the app opens it
+for you). Create a task by choosing a project folder, an agent, and a prompt;
+Hopper queues it and streams the agent's output live.
+
+### Build a standalone executable
+
+```bash
+bun run build   # outputs dist/ai-orchestrator
+./dist/ai-orchestrator
+```
+
+### Background
+
+Hopper was designed and built with AI coding agents; the original design
+document and planning prompt are preserved in
+[docs/planning-prompt.md](docs/planning-prompt.md).
 
 ## License
 
-MIT - Open source for the AI development community
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-**Status:** Planning Phase  
-**Target MVP:** Core functionality with Claude Code + Codex + Ollama integration  
+**Status:** Working v1 — local orchestration for Claude Code + Codex with Ollama prompt enhancement  
 **Platform:** macOS (arm64 & x64)  
 **Build System:** Bun 1.0+

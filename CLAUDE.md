@@ -16,7 +16,7 @@ bun install
 bun run dev
 
 # Type check
-bun run tsc --noEmit
+bun run typecheck
 
 # Production build (creates standalone executable)
 bun run build
@@ -64,9 +64,11 @@ curl http://localhost:11434/api/tags     # List models
 curl http://localhost:11434/api/generate # Generate text
 ```
 
-## Security Requirements
+## Security Model
 
-- Validate all folder paths to prevent directory traversal
-- Sanitize prompt inputs before passing to shell commands
-- Only operate within user-approved directories
-- API keys are managed via environment variables, never stored in app
+Hopper is a local, single-user tool:
+
+- The server binds to localhost only (port 3000) and has no authentication; it is not exposed to the network
+- Tasks are spawned via `Bun.spawn()` with argv arrays (no shell), so prompts are passed as arguments, not shell input — do not change this to string-based shell commands
+- The user chooses the working folder for each task; paths are not validated and there is no approved-directory restriction (Claude Code runs with the folder as cwd; Codex receives it via `-C`)
+- API keys are managed by the agent CLIs via environment variables, never stored in the app
